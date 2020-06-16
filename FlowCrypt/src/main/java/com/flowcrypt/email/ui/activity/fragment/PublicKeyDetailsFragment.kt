@@ -28,7 +28,6 @@ import com.flowcrypt.email.Constants
 import com.flowcrypt.email.R
 import com.flowcrypt.email.api.retrofit.LoadingState
 import com.flowcrypt.email.api.retrofit.Status
-import com.flowcrypt.email.api.retrofit.node.NodeRepository
 import com.flowcrypt.email.api.retrofit.response.model.node.NodeKeyDetails
 import com.flowcrypt.email.api.retrofit.response.node.NodeResponseWrapper
 import com.flowcrypt.email.api.retrofit.response.node.ParseKeysResult
@@ -235,7 +234,6 @@ class PublicKeyDetailsFragment : BaseFragment(), Observer<NodeResponseWrapper<*>
 
   private fun fetchKeyDetails() {
     val viewModel = ViewModelProvider(this).get(ParseKeysViewModel::class.java)
-    viewModel.init(NodeRepository())
     viewModel.responsesLiveData.observe(viewLifecycleOwner, this)
     viewModel.fetchKeys(String(contactEntity?.publicKey ?: byteArrayOf()))
   }

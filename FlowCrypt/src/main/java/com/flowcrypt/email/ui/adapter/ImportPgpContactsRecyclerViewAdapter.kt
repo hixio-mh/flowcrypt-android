@@ -28,11 +28,10 @@ import com.flowcrypt.email.util.UIUtil
  * Time: 08:07
  * E-mail: DenBond7@gmail.com
  */
-class ImportPgpContactsRecyclerViewAdapter
-  : RecyclerView.Adapter<ImportPgpContactsRecyclerViewAdapter.ViewHolder>() {
+class ImportPgpContactsRecyclerViewAdapter(val contactActionsListener: ContactActionsListener) : RecyclerView
+.Adapter<ImportPgpContactsRecyclerViewAdapter.ViewHolder>() {
 
   val publicKeys = mutableListOf<PublicKeyInfo>()
-  var contactActionsListener: ContactActionsListener? = null
 
   override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
     return ViewHolder(LayoutInflater.from(parent.context).inflate(R.layout.import_pgp_contact_item, parent, false))
@@ -84,7 +83,7 @@ class ImportPgpContactsRecyclerViewAdapter
     val pgpContact = PgpContact(publicKeyInfo.keyOwner, null, publicKeyInfo.publicKey, true,
         null, publicKeyInfo.fingerprint, publicKeyInfo.longId, publicKeyInfo.keyWords, 0)
 
-    contactActionsListener?.onSaveContactClick(publicKeyInfo)
+    contactActionsListener.onSaveContactClick(publicKeyInfo)
     Toast.makeText(context, R.string.contact_successfully_saved, Toast.LENGTH_SHORT).show()
     v.visibility = View.GONE
     publicKeyInfo.pgpContact = pgpContact
@@ -95,7 +94,7 @@ class ImportPgpContactsRecyclerViewAdapter
     val pgpContact = PgpContact(publicKeyInfo.keyOwner, null, publicKeyInfo.publicKey, true,
         null, publicKeyInfo.fingerprint, publicKeyInfo.longId, publicKeyInfo.keyWords, 0)
 
-    contactActionsListener?.onUpdateContactClick(publicKeyInfo)
+    contactActionsListener.onUpdateContactClick(publicKeyInfo)
     Toast.makeText(context, R.string.contact_successfully_updated, Toast.LENGTH_SHORT).show()
     v.visibility = View.GONE
     publicKeyInfo.pgpContact = pgpContact

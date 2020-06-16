@@ -15,13 +15,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Observer
-import androidx.loader.app.LoaderManager
-import androidx.loader.content.Loader
-import com.flowcrypt.email.R
 import com.flowcrypt.email.database.entity.AccountEntity
 import com.flowcrypt.email.jetpack.lifecycle.ConnectionLifecycleObserver
 import com.flowcrypt.email.jetpack.viewmodel.AccountViewModel
-import com.flowcrypt.email.model.results.LoaderResult
 import com.flowcrypt.email.ui.activity.base.BaseActivity
 import com.flowcrypt.email.util.UIUtil
 import com.google.android.material.snackbar.Snackbar
@@ -34,7 +30,7 @@ import com.google.android.material.snackbar.Snackbar
  * Time: 15:39
  * E-mail: DenBond7@gmail.com
  */
-abstract class BaseFragment : Fragment(), LoaderManager.LoaderCallbacks<LoaderResult> {
+abstract class BaseFragment : Fragment() {
   protected val accountViewModel: AccountViewModel by viewModels()
   protected var account: AccountEntity? = null
   protected var isAccountInfoReceived = false
@@ -86,18 +82,6 @@ abstract class BaseFragment : Fragment(), LoaderManager.LoaderCallbacks<LoaderRe
     return if (contentResourceId > 0) {
       inflater.inflate(contentResourceId, container, false)
     } else super.onCreateView(inflater, container, savedInstanceState)
-  }
-
-  override fun onCreateLoader(id: Int, args: Bundle?): Loader<LoaderResult> {
-    return Loader(baseActivity)
-  }
-
-  override fun onLoadFinished(loader: Loader<LoaderResult>, loaderResult: LoaderResult) {
-    handleLoaderResult(loader.id, loaderResult)
-  }
-
-  override fun onLoaderReset(loader: Loader<LoaderResult>) {
-
   }
 
   open fun onAccountInfoRefreshed(accountEntity: AccountEntity?) {
@@ -191,18 +175,6 @@ abstract class BaseFragment : Fragment(), LoaderManager.LoaderCallbacks<LoaderRe
 
   fun dismissCurrentSnackBar() {
     snackBar?.dismiss()
-  }
-
-  protected fun handleLoaderResult(loaderId: Int, loaderResult: LoaderResult?) {
-    if (loaderResult != null) {
-      when {
-        loaderResult.result != null -> onSuccess(loaderId, loaderResult.result)
-        loaderResult.exception != null -> onError(loaderId, loaderResult.exception)
-        else -> UIUtil.showInfoSnackbar(requireView(), getString(R.string.unknown_error))
-      }
-    } else {
-      UIUtil.showInfoSnackbar(requireView(), getString(R.string.error_loader_result_is_empty))
-    }
   }
 
   private fun initAccountViewModel() {

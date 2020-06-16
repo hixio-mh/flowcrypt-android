@@ -13,7 +13,7 @@ package com.flowcrypt.email.api.retrofit.response.base
  *         Time: 3:42 PM
  *         E-mail: DenBond7@gmail.com
  */
-class Result<out T>(val status: Status, val data: T?, val exception: Throwable?, val requestCode: Long = 0) {
+class Result<out T>(val status: Status, val data: T?, val exception: Throwable?, val progress: Int = 0, val requestCode: Long = 0) {
 
   enum class Status {
     SUCCESS,
@@ -35,8 +35,8 @@ class Result<out T>(val status: Status, val data: T?, val exception: Throwable?,
       return Result(status = Status.ERROR, data = data, exception = null, requestCode = requestCode)
     }
 
-    fun <T> loading(data: T? = null, requestCode: Long = 0): Result<T> {
-      return Result(status = Status.LOADING, data = data, exception = null, requestCode = requestCode)
+    fun <T> loading(data: T? = null, progress: Int = 0, requestCode: Long = 0): Result<T> {
+      return Result(status = Status.LOADING, data = data, exception = null, progress = progress, requestCode = requestCode)
     }
   }
 }

@@ -6,6 +6,7 @@
 package com.flowcrypt.email.ui.activity.fragment
 
 import android.app.Activity
+import android.content.Intent
 import android.content.OperationApplicationException
 import android.net.Uri
 import android.os.AsyncTask
@@ -18,26 +19,24 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.Observer
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.flowcrypt.email.R
-import com.flowcrypt.email.api.retrofit.node.NodeCallsExecutor
-import com.flowcrypt.email.api.retrofit.response.model.node.NodeKeyDetails
+import com.flowcrypt.email.api.retrofit.response.base.Result
 import com.flowcrypt.email.database.FlowCryptRoomDatabase
 import com.flowcrypt.email.database.entity.ContactEntity
+import com.flowcrypt.email.extensions.showInfoDialogFragment
 import com.flowcrypt.email.jetpack.viewmodel.ContactsViewModel
+import com.flowcrypt.email.jetpack.viewmodel.ParseKeysViewModel
 import com.flowcrypt.email.model.PgpContact
 import com.flowcrypt.email.model.PublicKeyInfo
-import com.flowcrypt.email.model.results.LoaderResult
 import com.flowcrypt.email.ui.activity.fragment.base.BaseFragment
+import com.flowcrypt.email.ui.activity.fragment.base.ListProgressBehaviour
 import com.flowcrypt.email.ui.adapter.ImportPgpContactsRecyclerViewAdapter
 import com.flowcrypt.email.util.GeneralUtil
-import com.flowcrypt.email.util.UIUtil
-import com.flowcrypt.email.util.exception.ExceptionUtil
-import com.google.android.gms.common.util.CollectionUtils
-import java.io.IOException
+import java.io.FileNotFoundException
 import java.lang.ref.WeakReference
-import java.util.*
 
 /**
  * This fragment displays information about public keys owners and information about keys.
@@ -47,38 +46,42 @@ import java.util.*
  * Time: 14:15
  * E-mail: DenBond7@gmail.com
  */
-class PreviewImportPgpContactFragment : BaseFragment(), View.OnClickListener,
+class PreviewImportPgpContactFragment : BaseFragment(), ListProgressBehaviour,
     ImportPgpContactsRecyclerViewAdapter.ContactActionsListener {
+
+  override val emptyView: View?
+    get() = view?.findViewById(R.id.empty)
+  override val progressView: View?
+    get() = view?.findViewById(R.id.progress)
+  override val contentView: View?
+    get() = view?.findViewById(R.id.content)
+  override val statusView: View?
+    get() = view?.findViewById(R.id.status)
+
+  override val contentResourceId: Int = R.layout.fragment_preview_import_pgp_contact
 
   private var recyclerView: RecyclerView? = null
   private var btnImportAll: TextView? = null
   private var textViewProgressTitle: TextView? = null
   private var progressBar: ProgressBar? = null
-  private var layoutContentView: View? = null
-  private var layoutProgress: View? = null
-  private var emptyView: View? = null
 
   private var publicKeysString: String? = null
   private var publicKeysFileUri: Uri? = null
 
   private val contactsViewModel: ContactsViewModel by viewModels()
-  private val adapter: ImportPgpContactsRecyclerViewAdapter = ImportPgpContactsRecyclerViewAdapter()
-  private var isParsingStarted: Boolean = false
-
-  override val contentResourceId: Int = R.layout.fragment_preview_import_pgp_contact
+  private val parseKeysViewModel: ParseKeysViewModel by viewModels()
+  private val adapter: ImportPgpContactsRecyclerViewAdapter = ImportPgpContactsRecyclerViewAdapter(this)
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    retainInstance = true
+    publicKeysString = arguments?.getString(KEY_EXTRA_PUBLIC_KEY_STRING)
+    publicKeysFileUri = arguments?.getParcelable(KEY_EXTRA_PUBLIC_KEYS_FILE_URI)
 
-    val bundle = arguments
-
-    if (bundle != null) {
-      publicKeysString = bundle.getString(KEY_EXTRA_PUBLIC_KEY_STRING)
-      publicKeysFileUri = bundle.getParcelable(KEY_EXTRA_PUBLIC_KEYS_FILE_URI)
+    if (publicKeysString.isNullOrEmpty()) {
+      parseKeysViewModel.parseKeys(publicKeysFileUri)
+    } else {
+      parseKeysViewModel.parseKeys(publicKeysString)
     }
-
-    adapter.contactActionsListener = this
   }
 
   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -89,38 +92,60 @@ class PreviewImportPgpContactFragment : BaseFragment(), View.OnClickListener,
   override fun onActivityCreated(savedInstanceState: Bundle?) {
     super.onActivityCreated(savedInstanceState)
     if (TextUtils.isEmpty(publicKeysString) && publicKeysFileUri == null) {
-      if (activity != null) {
-        requireActivity().setResult(Activity.RESULT_CANCELED)
-        requireActivity().finish()
-      }
-    } else if (!isParsingStarted) {
-      PublicKeysParserAsyncTask(this, publicKeysString ?: "", publicKeysFileUri).execute()
-      isParsingStarted = true
+      requireActivity().setResult(Activity.RESULT_CANCELED)
+      requireActivity().finish()
     }
+
+    setupParseKeysViewModel()
   }
 
-  override fun onClick(v: View) {
-    when (v.id) {
-      R.id.buttonImportAll -> SaveAllContactsAsyncTask(this, adapter.publicKeys).execute()
-    }
-  }
-
-  @Suppress("UNCHECKED_CAST")
-  override fun onSuccess(loaderId: Int, result: Any?) {
-    when (loaderId) {
-      R.id.loader_id_parse_public_keys -> {
-        val list = result as? List<PublicKeyInfo> ?: emptyList()
-        if (list.isNotEmpty()) {
-          UIUtil.exchangeViewVisibility(false, layoutProgress, layoutContentView)
-          adapter.swap(list)
-          btnImportAll?.visibility = if (list.size > 1) View.VISIBLE else View.GONE
-        } else {
-          UIUtil.exchangeViewVisibility(false, layoutProgress, emptyView)
+  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    when (requestCode) {
+      REQUEST_CODE_CONFIRM_EMPTY_RESULTS -> {
+        if (resultCode == Activity.RESULT_OK) {
+          activity?.finish()
         }
       }
 
-      else -> super.onSuccess(loaderId, result)
+      else -> {
+        super.onActivityResult(requestCode, resultCode, data)
+      }
     }
+  }
+
+  private fun setupParseKeysViewModel() {
+    parseKeysViewModel.parsedKeysFromSourceLiveData.observe(viewLifecycleOwner, Observer {
+      when (it.status) {
+        Result.Status.LOADING -> {
+          showProgress(getString(R.string.parsing_public_keys))
+          if (it.progress > 0) {
+            progressBar?.progress = it.progress
+          }
+        }
+
+        Result.Status.SUCCESS -> {
+          val list = it.data
+          if (list?.isNotEmpty() == true) {
+            showContent()
+            adapter.swap(list)
+            btnImportAll?.visibility = if (list.size > 1) View.VISIBLE else View.GONE
+          } else {
+            showEmptyView(msg = getString(R.string.no_public_key_found))
+          }
+        }
+
+        Result.Status.ERROR, Result.Status.EXCEPTION -> {
+          var msg = it.exception?.message ?: it.exception?.javaClass?.simpleName
+          ?: getString(R.string.unknown_error)
+
+          if (it.exception is FileNotFoundException) {
+            msg = getString(R.string.file_not_found)
+          }
+
+          showInfoDialogFragment(dialogMsg = msg, targetFragment = this, requestCode = REQUEST_CODE_CONFIRM_EMPTY_RESULTS)
+        }
+      }
+    })
   }
 
   override fun onError(loaderId: Int, e: Exception?) {
@@ -147,17 +172,17 @@ class PreviewImportPgpContactFragment : BaseFragment(), View.OnClickListener,
   }
 
   private fun initViews(root: View) {
-    layoutContentView = root.findViewById(R.id.layoutContentView)
-    layoutProgress = root.findViewById(R.id.layoutProgress)
-    btnImportAll = root.findViewById(R.id.buttonImportAll)
     textViewProgressTitle = root.findViewById(R.id.textViewProgressTitle)
     progressBar = root.findViewById(R.id.progressBar)
-    btnImportAll?.setOnClickListener(this)
     recyclerView = root.findViewById(R.id.recyclerViewContacts)
     recyclerView?.setHasFixedSize(true)
     recyclerView?.layoutManager = LinearLayoutManager(context)
     recyclerView?.adapter = adapter
-    emptyView = root.findViewById(R.id.emptyView)
+
+    btnImportAll = root.findViewById(R.id.buttonImportAll)
+    btnImportAll?.setOnClickListener {
+      SaveAllContactsAsyncTask(this, adapter.publicKeys).execute()
+    }
   }
 
   private fun handleImportAllResult(result: Boolean?) {
@@ -169,128 +194,9 @@ class PreviewImportPgpContactFragment : BaseFragment(), View.OnClickListener,
           requireActivity().finish()
         }
       } else {
-        UIUtil.exchangeViewVisibility(false, layoutProgress, layoutContentView)
+        showContent()
         Toast.makeText(context, getString(R.string.could_not_import_data), Toast.LENGTH_SHORT).show()
       }
-    }
-  }
-
-  private class PublicKeysParserAsyncTask internal constructor(fragment: PreviewImportPgpContactFragment,
-                                                               private val publicKeysString: String,
-                                                               private val publicKeysFileUri: Uri?)
-    : BaseAsyncTask<Void, Int, LoaderResult>(fragment) {
-    override val progressTitleResourcesId: Int
-      get() = R.string.parsing_public_keys
-
-    override fun doInBackground(vararg uris: Void): LoaderResult {
-      var armoredKeys: String? = publicKeysString
-
-      try {
-        if (publicKeysFileUri != null && weakRef.get() != null) {
-          weakRef.get()?.context?.let {
-            armoredKeys = GeneralUtil.readFileFromUriToString(it, publicKeysFileUri)
-          }
-        }
-      } catch (e: IOException) {
-        e.printStackTrace()
-        return LoaderResult(null, e)
-      }
-
-      return if (!TextUtils.isEmpty(armoredKeys) && weakRef.get() != null) {
-        parseKeys(armoredKeys)
-      } else {
-        LoaderResult(null, NullPointerException("An input string is null!"))
-      }
-    }
-
-    override fun onPostExecute(loaderResult: LoaderResult) {
-      super.onPostExecute(loaderResult)
-      if (weakRef.get() != null) {
-        weakRef.get()?.handleLoaderResult(R.id.loader_id_parse_public_keys, loaderResult)
-      }
-    }
-
-    override fun updateProgress(progress: Int) {
-      if (weakRef.get() != null) {
-        weakRef.get()?.progressBar!!.progress = progress
-      }
-    }
-
-    private fun parseKeys(armoredKeys: String?): LoaderResult {
-      try {
-        val details = NodeCallsExecutor.parseKeys(armoredKeys!!)
-
-        return if (!CollectionUtils.isEmpty(details)) {
-          LoaderResult(parsePublicKeysInfo(details), null)
-        } else {
-          if (weakRef.get() != null) {
-            LoaderResult(null, IllegalArgumentException(
-                weakRef.get()?.requireContext()?.getString(R.string.clipboard_has_wrong_structure,
-                    weakRef.get()?.requireContext()?.getString(R.string.public_))))
-          } else {
-            LoaderResult(null,
-                IllegalArgumentException("The content of your clipboard doesn't look like a valid PGP pubkey."))
-          }
-        }
-
-      } catch (e: Exception) {
-        e.printStackTrace()
-        ExceptionUtil.handleError(e)
-        return LoaderResult(null, e)
-      }
-    }
-
-    private fun parsePublicKeysInfo(details: List<NodeKeyDetails>): List<PublicKeyInfo> {
-      val publicKeyInfoList = ArrayList<PublicKeyInfo>()
-
-      val emails = HashSet<String>()
-
-      val blocksCount = details.size
-      var progress: Float
-      var lastProgress = 0f
-
-      for (i in 0 until blocksCount) {
-        val nodeKeyDetails = details[i]
-        val publicKeyInfo = getPublicKeyInfo(nodeKeyDetails, emails)
-
-        if (publicKeyInfo != null) {
-          publicKeyInfoList.add(publicKeyInfo)
-        }
-
-        progress = i * 100f / blocksCount
-        if (progress - lastProgress >= 1) {
-          publishProgress(progress.toInt())
-          lastProgress = progress
-        }
-      }
-
-      publishProgress(100)
-
-      return publicKeyInfoList
-    }
-
-    private fun getPublicKeyInfo(nodeKeyDetails: NodeKeyDetails, emails: MutableSet<String>): PublicKeyInfo? {
-      val fingerprint = nodeKeyDetails.fingerprint
-      val longId = nodeKeyDetails.longId
-      val keyWords = nodeKeyDetails.keywords
-      var keyOwner: String? = nodeKeyDetails.primaryPgpContact.email
-
-      if (keyOwner != null) {
-        keyOwner = keyOwner.toLowerCase(Locale.getDefault())
-
-        if (emails.contains(keyOwner)) {
-          return null
-        }
-
-        emails.add(keyOwner)
-
-        if (weakRef.get() != null) {
-          val contact = FlowCryptRoomDatabase.getDatabase(weakRef.get()?.requireContext()!!)
-              .contactsDao().getContactByEmails(keyOwner)?.toPgpContact()
-          return PublicKeyInfo(keyWords!!, fingerprint!!, keyOwner, longId!!, contact, nodeKeyDetails.publicKey!!)
-        }
-      }
-      return null
     }
   }
 
@@ -419,8 +325,7 @@ class PreviewImportPgpContactFragment : BaseFragment(), View.OnClickListener,
       if (weakRef.get() != null) {
         weakRef.get()?.progressBar!!.isIndeterminate = true
         weakRef.get()?.textViewProgressTitle!!.setText(progressTitleResourcesId)
-        UIUtil.exchangeViewVisibility(true,
-            weakRef.get()?.layoutProgress!!, weakRef.get()?.layoutContentView!!)
+        weakRef.get()?.showProgress()
       }
     }
 
@@ -444,6 +349,8 @@ class PreviewImportPgpContactFragment : BaseFragment(), View.OnClickListener,
     private val KEY_EXTRA_PUBLIC_KEYS_FILE_URI =
         GeneralUtil.generateUniqueExtraKey("KEY_EXTRA_PUBLIC_KEYS_FILE_URI",
             PreviewImportPgpContactFragment::class.java)
+
+    private const val REQUEST_CODE_CONFIRM_EMPTY_RESULTS = 100
 
     fun newInstance(stringExtra: String?, fileUri: Parcelable?): PreviewImportPgpContactFragment {
       val args = Bundle()
