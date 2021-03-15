@@ -83,8 +83,8 @@ blocks:
             - cache store android-build-cache ~/.android/build-cache
 
   - name: 'Testing'
-    skip:
-      when: "true"
+      #skip:
+    #when: "true"
     task:
       jobs:
         - name: 'Lint(structural quality)'
