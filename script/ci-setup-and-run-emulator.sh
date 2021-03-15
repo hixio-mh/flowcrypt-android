@@ -1,10 +1,10 @@
 #!/bin/bash
 
-"$ANDROID_SDK_ROOT/emulator/emulator" -accel-check
-echo -ne '\n' | avdmanager -v create avd --name ci-test-pixel-x86-api30 --package "system-images;android-30;google_apis;x86" --device 'pixel_xl' --abi 'google_apis/x86'
-cat ~/.android/avd/ci-test-pixel-x86-api30.avd/config.ini
-echo "vm.heapSize=256"  >> ~/.android/avd/ci-test-pixel-x86-api30.avd/config.ini
-echo "hw.ramSize=3064"  >> ~/.android/avd/ci-test-pixel-x86-api30.avd/config.ini
-cat ~/.android/avd/ci-test-pixel-x86-api30.avd/config.ini
-"$ANDROID_SDK_ROOT/emulator/emulator" -list-avds #debug
-"$ANDROID_SDK_ROOT/emulator/emulator" -avd ci-test-pixel-x86-api30 -no-window -no-boot-anim -no-audio &
+echo no | avdmanager -v create avd --name ci-test-pixel-x86-api30 --package "system-images;android-30;google_apis;x86" --device 'pixel_xl' --abi 'google_apis/x86'
+emulator -avd ci-test-pixel-x86-api30 -noaudio -no-boot-anim -gpu off -no-window &
+adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done;'
+adb shell wm dismiss-keyguard
+sleep 1
+adb shell settings put global window_animation_scale 0
+adb shell settings put global transition_animation_scale 0
+adb shell settings put global animator_duration_scale 0

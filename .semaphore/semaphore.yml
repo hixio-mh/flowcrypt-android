@@ -4,6 +4,10 @@ agent:
   machine:
     type: e1-standard-4
     os_image: ubuntu1804
+  containers:
+    - name: main
+      image: 'registry.semaphoreci.com/android:29'
+
 execution_time_limit:
   minutes: 45
 
@@ -17,19 +21,15 @@ auto_cancel:
 
 global_job_config:
   env_vars:
-    - name: SEMAPHORE_GIT_DIR
-      value: /home/semaphore/git/flowcrypt-android
-    - name: ANDROID_SDK_ROOT
-      value: /home/semaphore/Android/Sdk
+    - name: ADB_INSTALL_TIMEOUT #https://android.googlesource.com/platform/tools/base/+/bc733f18ec99fe5e14804ec062edc98039d67685/ddmlib/src/main/java/com/android/ddmlib/Device.java#88
+      value: "10"
   prologue:
     commands:
-      - export PATH=${ANDROID_SDK_ROOT}/emulator:${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:${PATH}
       - sudo rm -rf ~/.rbenv ~/.phpbrew
       - checkout
       # init environment variables
-      - export SUM=$(checksum build.gradle)-$(checksum FlowCrypt/build.gradle)-$(checksum ./script/ci-install-android-sdk.sh)
+      - export SUM=$(checksum build.gradle)-$(checksum FlowCrypt/build.gradle)-$(checksum ./script/ci-install-android-dependencies.sh)
       - export APP_GRADLE_CACHE=gradle-cache-$SUM # per conf files hash
-      - export ANDROID_SDK_CACHE=android-sdk-$SUM # per conf files hash
       - export BUILD_CXX_CACHE=build-cxx-cache-$SEMAPHORE_GIT_BRANCH-$SUM  # per branch and conf files hash
       - export BUILD_NATIVE_CACHE=build-native-cache-$SEMAPHORE_GIT_BRANCH-$SUM  # per branch and conf files hash
       - export BUILD_CACHE=build-cache-$SEMAPHORE_GIT_BRANCH-$SUM  # per branch and conf files hash
@@ -39,12 +39,11 @@ global_job_config:
       - cache restore $BUILD_NATIVE_CACHE
       - cache restore $BUILD_CACHE
       # restore global caches
-      - cache restore $ANDROID_SDK_CACHE
       - cache restore gradle-wrapper
       - cache restore gradle-cache
       - cache restore android-build-cache
-      # Install Android dependencies if needed
-      - ./script/ci-install-android-sdk.sh
+      # Install required Android dependencies if needed
+      - sdkmanager "ndk;22.0.7026061" > /dev/null | grep -v = || true
 blocks:
   - name: 'Build'
     execution_time_limit:
@@ -57,6 +56,8 @@ blocks:
             - cat /proc/cpuinfo
             # print Java version
             - java -version
+            # Install required Android dependencies
+            - sdkmanager "cmake;3.10.2.4988404" > /dev/null | grep -v = || true
             # compile project
             - ./gradlew --console=plain assembleDevTestDebug
       epilogue:
@@ -64,6 +65,8 @@ blocks:
           commands:
             # store app cache
             - echo "Store the app cache"
+            - cache clear
+            - find ~/.gradle/caches/ -name "*.lock" -type f -delete # https://medium.com/cirruslabs/mastering-gradle-caching-and-incremental-builds-37eb1af7fcde
             - cache has_key $APP_GRADLE_CACHE || cache store $APP_GRADLE_CACHE .gradle
             - cache has_key $BUILD_CXX_CACHE || cache store $BUILD_CXX_CACHE FlowCrypt/.cxx
             - cache has_key $BUILD_NATIVE_CACHE || cache store $BUILD_NATIVE_CACHE FlowCrypt/.externalNativeBuild
@@ -72,7 +75,6 @@ blocks:
             # clean and store global cache
             - echo "Store the global cache"
             - find ~/.gradle/caches/ -name "*.lock" -type f -delete # https://medium.com/cirruslabs/mastering-gradle-caching-and-incremental-builds-37eb1af7fcde
-            - cache has_key $ANDROID_SDK_CACHE || cache store $ANDROID_SDK_CACHE $ANDROID_SDK_ROOT
             - cache delete gradle-wrapper
             - cache delete gradle-cache
             - cache delete android-build-cache
@@ -81,6 +83,8 @@ blocks:
             - cache store android-build-cache ~/.android/build-cache
 
   - name: 'Testing'
+    skip:
+      when: "true"
     task:
       jobs:
         - name: 'Lint(structural quality)'
@@ -102,10 +106,10 @@ blocks:
             - env_var: EMULATOR
               values: [ "0", "1", "2", "3" ]
           commands:
+            # Install required Android dependencies
+            - ./script/ci-install-android-dependencies.sh
             # Setup and run an emulator
             - ./script/ci-setup-and-run-emulator.sh
-            # wait until ready
-            - ./script/ci-wait-for-emulator.sh
             # Run logging
             - adb logcat --buffer=crash > ~/logcat_log.txt &
             # Run instrumentation tests
@@ -115,10 +119,10 @@ blocks:
           commands:
             # Run an email server
             - cd docker-mailserver && ./run_email_server.sh && cd -
+            # Install required Android dependencies
+            - ./script/ci-install-android-dependencies.sh
             # Setup and run an emulator
             - ./script/ci-setup-and-run-emulator.sh
-            #wait until ready
-            - ./script/ci-wait-for-emulator.sh
             # Run logging
             - adb logcat --buffer=crash > ~/logcat_log.txt &
             # Run instrumentation tests
