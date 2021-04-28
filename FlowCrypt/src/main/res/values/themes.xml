@@ -28,4 +28,17 @@
     <style name="AppTheme.NoActionBar.Launcher">
         <item name="android:windowBackground">@drawable/splash_screen_background</item>
     </style>
+
+    <!-- Material base application theme. -->
+    <style name="Theme.AppTheme" parent="Theme.MaterialComponents.DayNight">
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+
+    <style name="Theme.AppTheme.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+    </style>
 </resources>

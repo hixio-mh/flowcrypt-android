@@ -83,6 +83,7 @@
 
         <activity
             android:name=".ui.activity.CreateMessageActivity"
+            android:theme="@style/Theme.AppTheme.NoActionBar"
             android:screenOrientation="portrait">
             <intent-filter>
                 <!--Handle the clicks on email links in a browser-->
