@@ -32,15 +32,10 @@ import com.flowcrypt.email.api.email.gmail.GmailApiHelper
 import com.flowcrypt.email.api.email.model.AttachmentInfo
 import com.flowcrypt.email.api.email.protocol.ImapProtocolUtil
 import com.flowcrypt.email.api.email.protocol.OpenStoreHelper
-import com.flowcrypt.email.api.retrofit.node.NodeRetrofitHelper
-import com.flowcrypt.email.api.retrofit.node.NodeService
-import com.flowcrypt.email.api.retrofit.request.node.DecryptFileRequest
-import com.flowcrypt.email.api.retrofit.response.node.DecryptedFileResult
 import com.flowcrypt.email.database.FlowCryptRoomDatabase
 import com.flowcrypt.email.database.entity.AccountEntity
 import com.flowcrypt.email.extensions.kotlin.toHex
 import com.flowcrypt.email.jetpack.viewmodel.AccountViewModel
-import com.flowcrypt.email.security.KeysStorageImpl
 import com.flowcrypt.email.util.FileAndDirectoryUtils
 import com.flowcrypt.email.util.GeneralUtil
 import com.flowcrypt.email.util.LogsUtil
@@ -643,20 +638,22 @@ class AttachmentDownloadManagerService : Service() {
       }
 
       FileInputStream(file).use { inputStream ->
-        val decryptedFileResult = getDecryptedFileResult(context, inputStream)
+        //val decryptedFileResult = getDecryptedFileResult(context, inputStream)
+        val bytes = byteArrayOf()
 
         val decryptedFile = File.createTempFile("tmp", null, context.externalCacheDir)
         att.name = FilenameUtils.getBaseName(att.name)
 
         FileUtils.openOutputStream(decryptedFile).use { outputStream ->
-          IOUtils.write(decryptedFileResult.decryptedBytes, outputStream)
+          //IOUtils.write(decryptedFileResult.decryptedBytes, outputStream)
+          IOUtils.write(bytes, outputStream)
           deleteTempFile(file)
           return decryptedFile
         }
       }
     }
 
-    private fun getDecryptedFileResult(context: Context, inputStream: InputStream): DecryptedFileResult {
+    /*private fun getDecryptedFileResult(context: Context, inputStream: InputStream): DecryptedFileResult {
       val keysStorage = KeysStorageImpl.getInstance(context)
       val list = keysStorage.getAllPgpPrivateKeys()
       val nodeService = NodeRetrofitHelper.getRetrofit()!!.create(NodeService::class.java)
@@ -672,7 +669,7 @@ class AttachmentDownloadManagerService : Service() {
       }
 
       return result
-    }
+    }*/
 
     /**
      * Remove the file which not downloaded fully.

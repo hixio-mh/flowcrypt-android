@@ -16,7 +16,6 @@ import com.flowcrypt.email.database.entity.AccountEntity
 import com.flowcrypt.email.database.entity.KeyEntity
 import com.flowcrypt.email.extensions.org.pgpainless.key.longId
 import com.flowcrypt.email.model.KeysStorage
-import com.flowcrypt.email.node.Node
 import com.flowcrypt.email.security.pgp.PgpKey
 import org.bouncycastle.bcpg.ArmoredInputStream
 import org.pgpainless.PGPainless
@@ -38,17 +37,15 @@ import java.io.ByteArrayInputStream
  */
 class KeysStorageImpl private constructor(context: Context) : KeysStorage {
   private val roomDatabase = FlowCryptRoomDatabase.getDatabase(context)
-  private val nodeLiveData = Node.getInstance(context.applicationContext).liveData
   private var keys = mutableListOf<KeyEntity>()
   private var nodeKeyDetailsList = mutableListOf<NodeKeyDetails>()
 
-  private val pureActiveAccountLiveData: LiveData<AccountEntity?> = Transformations.switchMap(nodeLiveData) {
+  private val pureActiveAccountLiveData: LiveData<AccountEntity?> =
     roomDatabase.accountDao().getActiveAccountLD()
-  }
-
-  private val encryptedKeysLiveData: LiveData<List<KeyEntity>> = Transformations.switchMap(pureActiveAccountLiveData) {
-    roomDatabase.keysDao().getAllKeysByAccountLD(it?.email ?: "")
-  }
+  private val encryptedKeysLiveData: LiveData<List<KeyEntity>> =
+    Transformations.switchMap(pureActiveAccountLiveData) {
+      roomDatabase.keysDao().getAllKeysByAccountLD(it?.email ?: "")
+    }
 
   private val keysLiveData = encryptedKeysLiveData.switchMap { list ->
     liveData {

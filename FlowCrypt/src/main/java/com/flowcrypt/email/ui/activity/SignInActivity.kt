@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.view.View
 import com.flowcrypt.email.BuildConfig
 import com.flowcrypt.email.R
+import com.flowcrypt.email.ui.activity.base.BaseActivity
 import com.flowcrypt.email.ui.activity.fragment.AddOtherAccountFragment
 import com.flowcrypt.email.ui.activity.fragment.MainSignInFragment
 import com.flowcrypt.email.ui.activity.fragment.UserRecoverableAuthExceptionFragment
@@ -27,7 +28,7 @@ import com.flowcrypt.email.util.GeneralUtil
  * Time: 14:50
  * E-mail: DenBond7@gmail.com
  */
-class SignInActivity : BaseNodeActivity() {
+class SignInActivity : BaseActivity() {
   private var accountAuthenticatorResponse: AccountAuthenticatorResponse? = null
   private val resultBundle: Bundle? = null
 
