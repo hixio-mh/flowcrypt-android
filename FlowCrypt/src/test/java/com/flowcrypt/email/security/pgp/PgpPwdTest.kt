@@ -5,6 +5,8 @@
 
 package com.flowcrypt.email.security.pgp
 
+import com.flowcrypt.email.Constants
+import com.nulabinc.zxcvbn.Zxcvbn
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -58,5 +60,34 @@ class PgpPwdTest {
   fun testRandom() {
     val password = PgpPwd.random()
     assertTrue("Password structure mismatch", passwordRegex.matches(password))
+  }
+
+  @Test
+  fun testEstimateStrengthViaDouble() {
+    val actualResult = PgpPwd.estimateStrength(88946283684264.toDouble(), PgpPwd.PwdType.PASSPHRASE)
+    val expectedResult = PgpPwd.PwdStrengthResult(
+      word = PgpPwd.Word(
+        match = "week",
+        word = "poor",
+        bar = 30,
+        color = "darkred",
+        pass = false
+      ),
+      seconds = BigInteger.valueOf(1111828),
+      time = "2 weeks"
+    )
+    assertEquals(expectedResult, actualResult)
+  }
+
+  @Test
+  fun test1() {
+    val z = Zxcvbn()
+    //val m = z.measure("2352523452bd dhf", arrayListOf(*Constants.PASSWORD_WEAK_WORDS)).guesses
+    val m = 21900100000000.toDouble()
+    val a = PgpPwd.estimateStrength(m, PgpPwd.PwdType.PASSPHRASE)
+    val b = PgpPwd.estimateStrength(m.toBigDecimal(), PgpPwd.PwdType.PASSPHRASE)
+    println("=================================================================")
+    println("\n${m.toLong()}\n$a\n$b")
+    println("=================================================================")
   }
 }

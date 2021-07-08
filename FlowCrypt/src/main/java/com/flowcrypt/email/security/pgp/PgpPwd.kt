@@ -12,9 +12,11 @@ import com.nulabinc.zxcvbn.Zxcvbn
 import org.pgpainless.util.Passphrase
 import java.math.BigDecimal
 import java.math.BigInteger
+import java.math.MathContext
 import java.math.RoundingMode
 import java.security.SecureRandom
 import java.util.concurrent.TimeUnit
+import kotlin.math.round
 
 object PgpPwd {
   data class Word(
@@ -46,7 +48,7 @@ object PgpPwd {
       passphrase.asString,
       listOf(*Constants.PASSWORD_WEAK_WORDS)
     ).guesses
-    val passwordStrength = estimateStrength(measure)
+    val passwordStrength = estimateStrength(measure.toBigDecimal())
 
     when (passwordStrength.word.word) {
       Constants.PASSWORD_QUALITY_WEAK,
@@ -63,10 +65,6 @@ object PgpPwd {
     }
   }
 
-  fun estimateStrength(guesses: Double, type: PwdType = PwdType.PASSPHRASE): PwdStrengthResult {
-    return estimateStrength(guesses.toBigDecimal(), type)
-  }
-
   fun estimateStrength(guesses: BigDecimal, type: PwdType = PwdType.PASSPHRASE): PwdStrengthResult {
     val timeToCrack = guesses.divide(CRACK_GUESSES_PER_SECOND)
     val readableTime = readableCrackTime(timeToCrack)
@@ -77,6 +75,23 @@ object PgpPwd {
     for (word in words) {
       if (readableTime.contains(word.match)) {
         return PwdStrengthResult(word, timeToCrack.toBigInteger(), readableTime)
+      }
+    }
+    throw IllegalArgumentException("Can't estimate strength for the number of guesses $guesses")
+  }
+
+  fun estimateStrength(guesses: Double, type: PwdType = PwdType.PASSPHRASE): PwdStrengthResult {
+    //return estimateStrength(guesses.toBigDecimal(), type)
+    val timeToCrack = guesses / CRACK_GUESSES_PER_SECOND_D
+    val readableTime = readableCrackTime(timeToCrack)
+    val words = when (type) {
+      PwdType.PASSPHRASE -> CRACK_TIME_WORDS_PASSPHRASE
+      PwdType.PASSWORD -> CRACK_TIME_WORDS_PASSWORD
+    }
+    for (word in words) {
+      if (readableTime.contains(word.match)) {
+        val n = BigDecimal(timeToCrack, MathContext(0, RoundingMode.HALF_UP)).toBigInteger()
+        return PwdStrengthResult(word, n, readableTime)
       }
     }
     throw IllegalArgumentException("Can't estimate strength for the number of guesses $guesses")
@@ -161,18 +176,68 @@ object PgpPwd {
     return "less than a second"
   }
 
+  private fun readableCrackTime(totalSeconds: Double): String {
+    val millennia = round(totalSeconds / SECONDS_PER_MILLENNIUM_D)
+    if (millennia > 0) return if (millennia == 1.0) "a millennium" else "millennia"
+
+    val centuries = round(totalSeconds / SECONDS_PER_CENTURY_D)
+    if (centuries > 0) {
+      return if (centuries == 1.0) "a century" else "centuries"
+    }
+
+    val years = round(totalSeconds / SECONDS_PER_YEAR_D)
+    if (years > 0) {
+      return "${years.toBigDecimal().toBigInteger()} year${numberWordEnding(years)}"
+    }
+
+    val months = round(totalSeconds / SECONDS_PER_MONTH_D)
+    if (months > 0) {
+      return "${months.toBigDecimal().toBigInteger()} month${numberWordEnding(months)}"
+    }
+
+    val weeks = round(totalSeconds / SECONDS_PER_WEEK_D)
+    if (weeks > 0) {
+      return "${weeks.toBigDecimal().toBigInteger()} week${numberWordEnding(weeks)}"
+    }
+
+    val days = round(totalSeconds / SECONDS_PER_DAY_D)
+    if (days > 0) {
+      return "${days.toBigDecimal().toBigInteger()} day${numberWordEnding(days)}"
+    }
+
+    val hours = round(totalSeconds / SECONDS_PER_HOUR_D)
+    if (hours > 0) {
+      return "${hours.toBigDecimal().toBigInteger()} hour${numberWordEnding(hours)}"
+    }
+
+    val minutes = round(totalSeconds / SECONDS_PER_MINUTE_D)
+    if (minutes > 0) {
+      return "${minutes.toBigDecimal().toBigInteger()} minute${numberWordEnding(minutes)}"
+    }
+
+    val seconds = round(totalSeconds / SECONDS_PER_SECONDS_D)
+    if (seconds > 0) {
+      return "${seconds.toBigDecimal().toBigInteger()} second${numberWordEnding(seconds)}"
+    }
+
+    return "less than a second"
+  }
+
   private fun numberWordEnding(n: BigDecimal): String {
     return if (n > BigDecimal.ONE) "s" else ""
+  }
+
+  private fun numberWordEnding(n: Double): String {
+    return if (n > 1.0) "s" else ""
   }
 
   // (10k pc)*(2 core p/pc)*(4k guess p/core)
   // https://www.abuse.ch/?p=3294
   // https://threatpost.com/how-much-does-botnet-cost-022813/77573/
   // https://www.abuse.ch/?p=3294
-  private val CRACK_GUESSES_PER_SECOND = BigDecimal.valueOf(10000 * 2 * 4000)
-
-  private val SECONDS_PER_MILLENNIUM = TimeUnit.DAYS.toSeconds(365 * 100 * 1000).toBigDecimal()
-  private val SECONDS_PER_CENTURY = TimeUnit.DAYS.toSeconds(365 * 100).toBigDecimal()
+  private val CRACK_GUESSES_PER_SECOND = BigDecimal.valueOf(10000L * 2 * 4000)
+  private val SECONDS_PER_MILLENNIUM = TimeUnit.DAYS.toSeconds(365L * 100 * 1000).toBigDecimal()
+  private val SECONDS_PER_CENTURY = TimeUnit.DAYS.toSeconds(365L * 100).toBigDecimal()
   private val SECONDS_PER_YEAR = TimeUnit.DAYS.toSeconds(365).toBigDecimal()
   private val SECONDS_PER_MONTH = TimeUnit.DAYS.toSeconds(30).toBigDecimal()
   private val SECONDS_PER_WEEK = TimeUnit.DAYS.toSeconds(7).toBigDecimal()
@@ -180,6 +245,17 @@ object PgpPwd {
   private val SECONDS_PER_HOUR = TimeUnit.HOURS.toSeconds(1).toBigDecimal()
   private val SECONDS_PER_MINUTE = TimeUnit.MINUTES.toSeconds(1).toBigDecimal()
   private val SECONDS_PER_SECONDS = TimeUnit.SECONDS.toSeconds(1).toBigDecimal()
+
+  private val CRACK_GUESSES_PER_SECOND_D = CRACK_GUESSES_PER_SECOND.toDouble()
+  private val SECONDS_PER_MILLENNIUM_D = SECONDS_PER_MILLENNIUM.toDouble()
+  private val SECONDS_PER_CENTURY_D = SECONDS_PER_CENTURY.toDouble()
+  private val SECONDS_PER_YEAR_D = SECONDS_PER_YEAR.toDouble()
+  private val SECONDS_PER_MONTH_D = SECONDS_PER_MONTH.toDouble()
+  private val SECONDS_PER_WEEK_D = SECONDS_PER_WEEK.toDouble()
+  private val SECONDS_PER_DAY_D = SECONDS_PER_DAY.toDouble()
+  private val SECONDS_PER_HOUR_D = SECONDS_PER_HOUR.toDouble()
+  private val SECONDS_PER_MINUTE_D = SECONDS_PER_MINUTE.toDouble()
+  private val SECONDS_PER_SECONDS_D = SECONDS_PER_SECONDS.toDouble()
 
   private val CRACK_TIME_WORDS_PASSWORD = arrayOf(
     // the requirements for a one-time password are less strict
