@@ -82,8 +82,8 @@ class PgpPwdTest {
   @Test
   fun test1() {
     val z = Zxcvbn()
-    //val m = z.measure("2352523452bd dhf", arrayListOf(*Constants.PASSWORD_WEAK_WORDS)).guesses
-    val m = 21900100000000.toDouble()
+    val m = z.measure("2352523452bd dhf", arrayListOf(*Constants.PASSWORD_WEAK_WORDS)).guesses
+    //val m = 21900100000000.toDouble()
     val a = PgpPwd.estimateStrength(m, PgpPwd.PwdType.PASSPHRASE)
     val b = PgpPwd.estimateStrength(m.toBigDecimal(), PgpPwd.PwdType.PASSPHRASE)
     println("=================================================================")
